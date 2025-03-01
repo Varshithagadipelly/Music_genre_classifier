@@ -1,0 +1,518 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "provenance": []
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "code",
+      "execution_count": null,
+      "metadata": {
+        "id": "sjxwYS-scLam"
+      },
+      "outputs": [],
+      "source": [
+        "import numpy as np\n",
+        "import pandas as pd\n",
+        "import seaborn as sns\n",
+        "import matplotlib.pyplot as plt\n",
+        "\n",
+        "import os, json, math, librosa\n",
+        "\n",
+        "import IPython.display as ipd\n",
+        "import librosa.display\n",
+        "\n",
+        "import tensorflow as tf\n",
+        "import tensorflow.keras as keras\n",
+        "\n",
+        "from tensorflow.keras import Sequential\n",
+        "from tensorflow.keras.layers import Conv2D\n",
+        "\n",
+        "import sklearn.model_selection as sk\n",
+        "\n",
+        "from sklearn.model_selection import train_test_split\n",
+        "from sklearn.metrics import classification_report\n",
+        "from sklearn.metrics import accuracy_score, precision_recall_fscore_support"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Getting Genres from folder name\n",
+        "\n",
+        "\n",
+        "# MUSIC = '../input/gtzan-dataset-music-genre-classification/Data/genres_original/'\n",
+        "MUSIC = '/content/drive/MyDrive/Data/genres_original'\n",
+        "music_dataset = [] # File locations for each wav file\n",
+        "genre_target = [] #\n",
+        "for root, dirs, files in os.walk(MUSIC):\n",
+        "    for name in files:\n",
+        "        filename = os.path.join(root, name)\n",
+        "        if filename != '/Data/genres_original/jazz/jazz.00054.wav':\n",
+        "        # if filename != 'Data/genres_original/metal/metal.00000.wav':\n",
+        "            music_dataset.append(filename)\n",
+        "            genre_target.append(filename.split(\"/\")[-2])"
+      ],
+      "metadata": {
+        "id": "MIMqJCn8cZ4Z"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Displaying genres\n",
+        "print(set(music_dataset))\n",
+        "print(set(genre_target))"
+      ],
+      "metadata": {
+        "id": "xZeSm5tzcb6o"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Testing Audio Files\n",
+        "\n",
+        "audio_path = music_dataset[50]\n",
+        "# img_path = './data/images_original/blues/blues00011.png'\n",
+        "\n",
+        "\n",
+        "x , sr = librosa.load(audio_path)\n",
+        "\n",
+        "\n",
+        "\n",
+        "librosa.load(audio_path, sr=None)\n",
+        "\n",
+        "ipd.Audio(audio_path)"
+      ],
+      "metadata": {
+        "id": "LzWOw1nhcd6D"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "\n",
+        "# Visualizing Audio File as a waveform\n",
+        "# plt.figure(figsize=(16, 5))\n",
+        "plt.figure(figsize=(16, 5))\n",
+        "librosa.display.waveshow(x, sr=sr)\n"
+      ],
+      "metadata": {
+        "id": "uNWGTkhYcfrx"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Visualizing audio file as a spectogram\n",
+        "X = librosa.stft(x)\n",
+        "Xdb = librosa.amplitude_to_db(abs(X))\n",
+        "plt.figure(figsize=(14, 5))\n",
+        "librosa.display.specshow(Xdb, sr=sr, x_axis='time', y_axis='hz')\n",
+        "plt.title('Spectogram')\n",
+        "plt.colorbar()"
+      ],
+      "metadata": {
+        "id": "dwuKyldQckPs"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Visualizing Audio as Mel-Spectogram\n",
+        "\n",
+        "file_location = audio_path\n",
+        "y, sr = librosa.load(file_location)\n",
+        "melSpec = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128)\n",
+        "melSpec_dB = librosa.power_to_db(melSpec, ref=np.max)\n",
+        "plt.figure(figsize=(10, 5))\n",
+        "librosa.display.specshow(melSpec_dB, x_axis='time', y_axis='mel', sr=sr, fmax=8000)\n",
+        "plt.colorbar(format='%+1.0f dB')\n",
+        "plt.title(\"MelSpectrogram\")\n",
+        "plt.tight_layout()\n",
+        "plt.show()"
+      ],
+      "metadata": {
+        "id": "qXSkN8mhcmpJ"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import math\n",
+        "import json\n",
+        "import os\n",
+        "import librosa\n",
+        "\n",
+        "# Set your constants\n",
+        "# MUSIC = '/content/drive/MyDrive/Data/genres_original'\n",
+        "DATASET_PATH = '/content/drive/MyDrive/Data/genres_original'\n",
+        "JSON_PATH = \"data_10.json\"\n",
+        "SAMPLE_RATE = 22050\n",
+        "TRACK_DURATION = 30  # measured in seconds\n",
+        "SAMPLES_PER_TRACK = SAMPLE_RATE * TRACK_DURATION\n",
+        "\n",
+        "# Define the function to save MFCCs\n",
+        "def save_mfcc(dataset_path, json_path, num_mfcc=13, n_fft=2048, hop_length=512, num_segments=5):\n",
+        "    data = {\n",
+        "        \"mapping\": [],\n",
+        "        \"labels\": [],\n",
+        "        \"mfcc\": []\n",
+        "    }\n",
+        "\n",
+        "    samples_per_segment = int(SAMPLES_PER_TRACK / num_segments)\n",
+        "    num_mfcc_vectors_per_segment = math.ceil(samples_per_segment / hop_length)\n",
+        "\n",
+        "    # Loop through all genre sub-folders\n",
+        "    for i, (dirpath, dirnames, filenames) in enumerate(os.walk(dataset_path)):\n",
+        "        # Ensure we're processing a genre sub-folder level\n",
+        "        if '.ipynb_checkpoints' in dirpath:\n",
+        "            continue\n",
+        "        if dirpath is not dataset_path:\n",
+        "            # Save genre label (i.e., sub-folder name) in the mapping\n",
+        "            semantic_label = dirpath.split(\"/\")[-1]\n",
+        "            data[\"mapping\"].append(semantic_label)\n",
+        "            print(\"\\nProcessing: {}\".format(semantic_label))\n",
+        "            # Process all audio files in genre sub-dir\n",
+        "            for f in filenames:\n",
+        "                file_path = os.path.join(dirpath, f)\n",
+        "                # Load audio file\n",
+        "                signal, sample_rate = librosa.load(file_path, sr=SAMPLE_RATE)\n",
+        "                # Process all segments of audio file\n",
+        "                for d in range(num_segments):\n",
+        "                    # Calculate start and finish sample for current segment\n",
+        "                    start = samples_per_segment * d\n",
+        "                    finish = start + samples_per_segment\n",
+        "                    # Extract MFCC\n",
+        "                    mfcc = librosa.feature.mfcc(y=signal[start:finish], sr=sample_rate, n_mfcc=num_mfcc, n_fft=n_fft, hop_length=hop_length)\n",
+        "                    mfcc = mfcc.T\n",
+        "                    # Store only MFCC feature with expected number of vectors\n",
+        "                    if len(mfcc) == num_mfcc_vectors_per_segment:\n",
+        "                        data[\"mfcc\"].append(mfcc.tolist())\n",
+        "                        data[\"labels\"].append(i-1)\n",
+        "\n",
+        "                        print(\"{}, segment:{}\".format(file_path, d+1))\n",
+        "        # print(i)\n",
+        "\n",
+        "    # Save MFCCs to JSON file\n",
+        "    with open(json_path, \"w\") as fp:\n",
+        "        json.dump(data, fp, indent=4)"
+      ],
+      "metadata": {
+        "id": "ixPCBEJ-cogD"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "rm -rf find -type d -name .ipynb_checkpoints"
+      ],
+      "metadata": {
+        "id": "un3CiPUVcq5K"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Run the function to save MFCCs\n",
+        "save_mfcc(DATASET_PATH, JSON_PATH, num_segments=6)"
+      ],
+      "metadata": {
+        "id": "FOBeQZoVctU-"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "DATA_PATH = \"./data_10.json\"\n",
+        "\n",
+        "\n",
+        "def load_data(data_path):\n",
+        "    \"\"\"Loads training dataset from json file.\n",
+        "        :param data_path (str): Path to json file containing data\n",
+        "        :return X (ndarray): Inputs\n",
+        "        :return y (ndarray): Targets\n",
+        "    \"\"\"\n",
+        "\n",
+        "    with open(data_path, \"r\") as fp:\n",
+        "        data = json.load(fp)\n",
+        "\n",
+        "    X = np.array(data[\"mfcc\"])\n",
+        "    y = np.array(data[\"labels\"])\n",
+        "    z = np.array(data['mapping'])\n",
+        "    return X, y, z\n",
+        "\n",
+        "\n",
+        "    # print(X.shape)\n",
+        "    # print(y.shape)\n",
+        "    # print(z.shape)\n",
+        "\n",
+        "def plot_history(history):\n",
+        "    \"\"\"Plots accuracy/loss for training/validation set as a function of the epochs\n",
+        "        :param history: Training history of model\n",
+        "        :return:\n",
+        "    \"\"\"\n",
+        "\n",
+        "    fig, axs = plt.subplots(2)\n",
+        "\n",
+        "    # create accuracy sublpot\n",
+        "    axs[0].plot(history.history[\"accuracy\"], label=\"train accuracy\")\n",
+        "    axs[0].plot(history.history[\"val_accuracy\"], label=\"test accuracy\")\n",
+        "    axs[0].set_ylabel(\"Accuracy\")\n",
+        "    axs[0].legend(loc=\"lower right\")\n",
+        "    axs[0].set_title(\"Accuracy eval\")\n",
+        "\n",
+        "    # create error sublpot\n",
+        "    axs[1].plot(history.history[\"loss\"], label=\"train error\")\n",
+        "    axs[1].plot(history.history[\"val_loss\"], label=\"test error\")\n",
+        "    axs[1].set_ylabel(\"Error\")\n",
+        "    axs[1].set_xlabel(\"Epoch\")\n",
+        "    axs[1].legend(loc=\"upper right\")\n",
+        "    axs[1].set_title(\"Error eval\")\n",
+        "\n",
+        "    plt.show()\n",
+        "\n",
+        "\n",
+        "def prepare_datasets(test_size, validation_size):\n",
+        "    \"\"\"Loads data and splits it into train, validation and test sets.\n",
+        "    :param test_size (float): Value in [0, 1] indicating percentage of data set to allocate to test split\n",
+        "    :param validation_size (float): Value in [0, 1] indicating percentage of train set to allocate to validation split\n",
+        "    :return X_train (ndarray): Input training set\n",
+        "    :return X_validation (ndarray): Input validation set\n",
+        "    :return X_test (ndarray): Input test set\n",
+        "    :return y_train (ndarray): Target training set\n",
+        "    :return y_validation (ndarray): Target validation set\n",
+        "    :return y_test (ndarray): Target test set\n",
+        "    :return z : Mappings for data\n",
+        "    \"\"\"\n",
+        "\n",
+        "    # load data\n",
+        "    X, y, z = load_data(DATA_PATH)\n",
+        "\n",
+        "    # create train, validation and test split\n",
+        "    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size)\n",
+        "    X_train, X_validation, y_train, y_validation = train_test_split(X_train, y_train, test_size=validation_size)\n",
+        "\n",
+        "    # add an axis to input sets\n",
+        "    X_train = X_train[..., np.newaxis]\n",
+        "    X_validation = X_validation[..., np.newaxis]\n",
+        "    X_test = X_test[..., np.newaxis]\n",
+        "\n",
+        "\n",
+        "\n",
+        "\n",
+        "    return X_train, X_validation, X_test, y_train, y_validation, y_test, z\n",
+        "\n",
+        "  # # Get train, validation, test splits\n",
+        "  #   X_train, X_validation, X_test, y_train, y_validation, y_test, z = prepare_datasets(0.25, 0.2)\n",
+        "\n",
+        "  #   # Check shapes\n",
+        "  #   print(\"X_train shape:\", X_train.shape)\n",
+        "  #   print(\"X_validation shape:\", X_validation.shape)\n",
+        "  #   print(\"X_test shape:\", X_test.shape)\n",
+        "\n",
+        "def build_model(input_shape):\n",
+        "    \"\"\"Generates CNN model\n",
+        "    :param input_shape (tuple): Shape of input set\n",
+        "    :return model: CNN model\n",
+        "    \"\"\"\n",
+        "\n",
+        "    # build network topology\n",
+        "    model = keras.Sequential()\n",
+        "\n",
+        "    # 1st conv layer\n",
+        "    model.add(keras.layers.Conv2D(32, (3, 3), activation='relu', input_shape=input_shape))\n",
+        "    model.add(keras.layers.MaxPooling2D((3, 3), strides=(2, 2), padding='same'))\n",
+        "    model.add(keras.layers.BatchNormalization())\n",
+        "\n",
+        "    # 2nd conv layer\n",
+        "    model.add(keras.layers.Conv2D(32, (3, 3), activation='relu'))\n",
+        "    model.add(keras.layers.MaxPooling2D((3, 3), strides=(2, 2), padding='same'))\n",
+        "    model.add(keras.layers.BatchNormalization())\n",
+        "\n",
+        "     # 3rd conv layer\n",
+        "    model.add(keras.layers.Conv2D(32, (2, 2), activation='relu'))\n",
+        "    model.add(keras.layers.MaxPooling2D((2, 2), strides=(2, 2), padding='same'))\n",
+        "    model.add(keras.layers.BatchNormalization())\n",
+        "\n",
+        "    # flatten output and feed it into dense layer\n",
+        "    model.add(keras.layers.Flatten())\n",
+        "    model.add(keras.layers.Dense(64, activation='relu'))\n",
+        "    model.add(keras.layers.Dropout(0.3))\n",
+        "\n",
+        "    # output layer\n",
+        "    model.add(keras.layers.Dense(10, activation='softmax'))\n",
+        "\n",
+        "    return model\n",
+        "\n",
+        "\n",
+        "\n",
+        "def predict(model, X, y):\n",
+        "    \"\"\"Predict a single sample using the trained model\n",
+        "    :param model: Trained classifier\n",
+        "    :param X: Input data\n",
+        "    :param y (int): Target\n",
+        "    \"\"\"\n",
+        "\n",
+        "    # add a dimension to input data for sample - model.predict() expects a 4d array in this case\n",
+        "    X = X[np.newaxis, ...] # array shape (1, 130, 13, 1)\n",
+        "\n",
+        "    # perform prediction\n",
+        "    prediction = model.predict(X)\n",
+        "\n",
+        "    # get index with max value\n",
+        "    predicted_index = np.argmax(prediction, axis=1)\n",
+        "\n",
+        "    # get mappings for target and predicted label\n",
+        "    target = z[y]\n",
+        "    predicted = z[predicted_index]\n",
+        "\n",
+        "    print(\"Target: {}, Predicted label: {}\".format(target, predicted))"
+      ],
+      "metadata": {
+        "id": "LQGHjR8VcvGP"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# get train, validation, test splits\n",
+        "X_train, X_validation, X_test, y_train, y_validation, y_test, z = prepare_datasets(0.25, 0.2)\n",
+        "\n",
+        "# create network\n",
+        "input_shape = (X_train.shape[1], X_train.shape[2], 1)\n",
+        "model = build_model(input_shape)\n",
+        "\n",
+        "# compile model\n",
+        "optimiser = keras.optimizers.Adam(learning_rate=0.0001)\n",
+        "model.compile(optimizer=optimiser,\n",
+        "              loss='sparse_categorical_crossentropy',\n",
+        "              metrics=['accuracy'])\n",
+        "\n",
+        "model.summary()\n",
+        "\n",
+        "# train model\n",
+        "history = model.fit(X_train, y_train, validation_data=(X_validation, y_validation), batch_size=32, epochs=30)\n",
+        "\n",
+        "# plot accuracy/error for training and validation\n",
+        "plot_history(history)\n",
+        "# evaluate model on test set\n",
+        "test_loss, test_acc = model.evaluate(X_test, y_test, verbose=2)\n",
+        "print('\\nTest accuracy:', test_acc)\n",
+        "\n",
+        "\n",
+        "\n"
+      ],
+      "metadata": {
+        "id": "9GjqLK0qcxja"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from sklearn.metrics import accuracy_score, precision_recall_fscore_support\n",
+        "\n",
+        "# Get overall accuracy\n",
+        "overall_accuracy = accuracy_score(y_test, y_pred)\n",
+        "\n",
+        "# Get overall precision, recall, f1-score, and support\n",
+        "overall_precision, overall_recall, overall_fscore, overall_support = precision_recall_fscore_support(y_test, y_pred, average='weighted')\n",
+        "\n",
+        "# Print overall metrics\n",
+        "print(\"Overall Metrics:\")\n",
+        "print(f\"Overall Accuracy: {overall_accuracy}\")\n",
+        "print(f\"Overall Precision: {overall_precision}\")\n",
+        "print(f\"Overall Recall: {overall_recall}\")\n",
+        "print(f\"Overall F1-Score: {overall_fscore}\")\n"
+      ],
+      "metadata": {
+        "id": "YT1R7vdec1ZC"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# pick a sample to predict from the test set\n",
+        "X_to_predict = X_test[100]\n",
+        "y_to_predict = y_test[100]\n",
+        "\n",
+        "# predict sample\n",
+        "predict(model, X_to_predict, y_to_predict)"
+      ],
+      "metadata": {
+        "id": "TlxPOG3Fc373"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import h5py\n",
+        "\n",
+        "# Function to extract and save weights\n",
+        "def save_weights(model, file_path):\n",
+        "    \"\"\"Extracts and saves weights of the model to a file.\n",
+        "    :param model: Trained model\n",
+        "    :param file_path: File path to save the weights\n",
+        "    \"\"\"\n",
+        "    # Extract weights\n",
+        "    weights = model.get_weights()\n",
+        "\n",
+        "    # Save weights to file\n",
+        "    with h5py.File(file_path, 'w') as f:\n",
+        "        for i, weight in enumerate(weights):\n",
+        "            f.create_dataset('weight_' + str(i), data=weight)\n",
+        "\n",
+        "# Assuming you have already trained the model, let's say 'model' is your trained model instance\n",
+        "# Define the file path where you want to save the weights\n",
+        "weights_file_path = \"/content/drive/MyDrive/saved_models/model_weights.h5\"\n",
+        "\n",
+        "# Call the function to save weights\n",
+        "save_weights(model, weights_file_path)\n",
+        "\n",
+        "print(\"Weights saved successfully to:\", weights_file_path)\n"
+      ],
+      "metadata": {
+        "id": "8VvElMM4c6aG"
+      },
+      "execution_count": null,
+      "outputs": []
+    }
+  ]
+}
